@@ -2,12 +2,13 @@
 
 ## Running application
 
-First you have to make sure that all dependancies are installed
+First you cd into the actual folder and installing the dependancies by doing:
 
 ```bash
+cd code-flow
 npm install
 ```
-then after installed run:
+then after cd-ed and installed run:
 
 ```bash
 npm run dev
