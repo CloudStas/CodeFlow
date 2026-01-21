@@ -1,7 +1,19 @@
 import { createSignal, Show, createEffect } from "solid-js";
+import { lazy } from "solid-js";
+import { Suspense } from "solid-js";
+
+type NodeData = {
+  id: string;
+  label: string;
+  type: string;
+  fullLabel?: string;
+  details?: string;
+  count?: number;
+};
 import { NoHydration } from "solid-js/web";
-import ShikiEditor from "~/components/Editor";
-import DemoChart, { type NodeData } from "~/components/DemoChart";
+import FileExplorer from "~/components/FileExplorer";
+const DemoChart = lazy(() => import("~/components/DemoChart"));
+const ShikiEditor = lazy(() => import("~/components/Editor"));
 
 export default function Demo() {
 
@@ -39,10 +51,7 @@ else:
     print("Less than or equal to 25")
 
 for i in range(5):
-    print(i)
-
-return z`;
-
+    print(i)`;
   const [code, setCode] = createSignal(defaultCode);
 
   const groupConsecutiveStatements = (lines: string[], startIndex: number, groupType: string) => {
@@ -334,9 +343,13 @@ return z`;
 
   // Run flowchart on initial load with default code
   createEffect(() => {
-    if (code()) {
+    if (!code()) return;
+
+    const timer = setTimeout(() => {
       runFlowchart();
-    }
+    }, 300);
+
+    return () => clearTimeout(timer);
   });
 
   const startDragging = (e: MouseEvent) => {
@@ -361,27 +374,54 @@ return z`;
 
   return (
     <main class="w-full h-screen flex overflow-hidden">
+      {/* 1. File Explorer - fixed width sidebar */}
+      <div class="h-full w-72 bg-[#1e1e1e] border-r border-gray-800 overflow-hidden flex flex-col">
+        <FileExplorer />
+      </div>
+
+      {/* 2. Resizer between explorer and editor */}
+      <div
+        class="w-2 cursor-col-resize bg-gray-300 hover:bg-gray-400 active:bg-gray-500"
+        onMouseDown={startDragging} // Reuse or create separate drag for this panel if needed
+      />
+
+      {/* 3. Editor panel - resizable */}
       <div
         class="h-full bg-[#1e1e1e] text-gray-200 p-0 overflow-hidden"
         style={{ width: `${leftWidth()}px` }}
       >
-        <ShikiEditor code={code()} onCodeChange={setCode} />
+        <Suspense fallback={
+          <div class="h-full flex items-center justify-center text-gray-400">
+            Loading editor...
+          </div>
+        }>
+          <ShikiEditor code={code()} onCodeChange={setCode} />
+        </Suspense>
       </div>
 
+      {/* 4. Resizer between editor and chart */}
       <div
         class="w-2 cursor-col-resize bg-gray-300 hover:bg-gray-400 active:bg-gray-500"
-        onMouseDown={startDragging}
+        onMouseDown={startDragging} // same handler for now; extend logic later for multi-panel
       />
 
+      {/* 5. Chart area - takes remaining space */}
       <div class="flex-1 h-full overflow-hidden relative">
         <NoHydration>
-          <DemoChart
-            graph={graphData()}
-            onRunClick={runFlowchart}
-            onNodeClick={setSelectedNode}
-          />
+          <Suspense fallback={
+            <div class="absolute inset-0 flex items-center justify-center bg-gray-900 text-gray-300 text-lg">
+              Generating flowchart...
+            </div>
+          }>
+            <DemoChart
+              graph={graphData()}
+              onRunClick={runFlowchart}
+              onNodeClick={setSelectedNode}
+            />
+          </Suspense>
         </NoHydration>
 
+        {/* Node details sidebar - absolute on right of chart area */}
         <div
           class={`absolute top-0 right-0 bottom-0 w-96 bg-white border-l border-gray-200 shadow-2xl overflow-y-auto
                 transition-transform duration-300 ease-in-out z-10
@@ -402,7 +442,6 @@ return z`;
                   <span class="text-2xl leading-none">×</span>
                 </button>
               </div>
-
               <div class="space-y-6 text-gray-700 text-sm">
                 <div class="flex items-center gap-3">
                   <span class="font-medium text-gray-600">Type:</span>
@@ -410,7 +449,6 @@ return z`;
                     {selectedNode()?.type}
                   </span>
                 </div>
-
                 <Show when={selectedNode()?.fullLabel}>
                   <div>
                     <p class="font-medium text-gray-600 mb-2">Full code:</p>
@@ -419,15 +457,14 @@ return z`;
                     </div>
                   </div>
                 </Show>
-
                 <Show when={selectedNode()?.details} keyed>
-                  {(details) => (
+                  {(details: string) => (
                     <div>
                       <p class="font-medium text-gray-600 mb-2">
                         Variables ({selectedNode()?.count ?? '—'})
                       </p>
                       <div class="bg-gray-50 p-4 rounded-lg border border-gray-200 font-mono text-sm space-y-2">
-                        {details.split('\n').map((line, idx) => (
+                        {details.split('\n').map((line: string, idx: number) => (
                           <div class="break-all leading-relaxed">
                             {line}
                           </div>
